@@ -153,64 +153,67 @@ orders the results by time."""
                         )
                     times[timestamp_type] = timestamp
                     self.timeline[(plugin_name, item)] = times
-
-                for plugin_name, item in self.timeline:
-                    data.append(
-                        (
-                            0,
-                            [
-                                plugin_name,
-                                item,
-                                times.get(
-                                    TimeLinerType.CREATED,
-                                    renderers.NotApplicableValue(),
-                                ),
-                                times.get(
-                                    TimeLinerType.MODIFIED,
-                                    renderers.NotApplicableValue(),
-                                ),
-                                times.get(
-                                    TimeLinerType.ACCESSED,
-                                    renderers.NotApplicableValue(),
-                                ),
-                                times.get(
-                                    TimeLinerType.CHANGED,
-                                    renderers.NotApplicableValue(),
-                                ),
-                            ],
-                        )
-                    )
-
-                    # Write each entry because the body file doesn't need to be sorted
-                    if fp:
-                        times = self.timeline[(plugin_name, item)]
-                        # Body format is: MD5|name|inode|mode_as_string|UID|GID|size|atime|mtime|ctime|crtime
-
-                        if self._any_time_present(times):
-                            fp.write(
-                                "|{} - {}|0|0|0|0|0|{}|{}|{}|{}\n".format(
-                                    plugin_name,
-                                    self._sanitize_body_format(item),
-                                    self._text_format(
-                                        times.get(TimeLinerType.ACCESSED, "0")
-                                    ),
-                                    self._text_format(
-                                        times.get(TimeLinerType.MODIFIED, "0")
-                                    ),
-                                    self._text_format(
-                                        times.get(TimeLinerType.CHANGED, "0")
-                                    ),
-                                    self._text_format(
-                                        times.get(TimeLinerType.CREATED, "0")
-                                    ),
-                                )
-                            )
             except Exception as e:
                 vollog.log(
                     logging.INFO,
                     f"Exception occurred running plugin: {plugin_name}: {e}",
                 )
                 vollog.log(logging.DEBUG, traceback.format_exc())
+
+        # Assemble the grid rows and the bodyfile only after every plugin has
+        # run.  Each (plugin, item) entry produces exactly one row, and every
+        # column is taken from that entry's own timestamps, so the grid and
+        # the bodyfile always agree with each other.
+        for (plugin_name, item), times in self.timeline.items():
+            data.append(
+                (
+                    0,
+                    [
+                        plugin_name,
+                        item,
+                        times.get(
+                            TimeLinerType.CREATED,
+                            renderers.NotApplicableValue(),
+                        ),
+                        times.get(
+                            TimeLinerType.MODIFIED,
+                            renderers.NotApplicableValue(),
+                        ),
+                        times.get(
+                            TimeLinerType.ACCESSED,
+                            renderers.NotApplicableValue(),
+                        ),
+                        times.get(
+                            TimeLinerType.CHANGED,
+                            renderers.NotApplicableValue(),
+                        ),
+                    ],
+                )
+            )
+
+            # Write each entry because the body file doesn't need to be sorted
+            if fp:
+                # Body format is: MD5|name|inode|mode_as_string|UID|GID|size|atime|mtime|ctime|crtime
+
+                if self._any_time_present(times):
+                    fp.write(
+                        "|{} - {}|0|0|0|0|0|{}|{}|{}|{}\n".format(
+                            plugin_name,
+                            self._sanitize_body_format(item),
+                            self._text_format(
+                                times.get(TimeLinerType.ACCESSED, "0")
+                            ),
+                            self._text_format(
+                                times.get(TimeLinerType.MODIFIED, "0")
+                            ),
+                            self._text_format(
+                                times.get(TimeLinerType.CHANGED, "0")
+                            ),
+                            self._text_format(
+                                times.get(TimeLinerType.CREATED, "0")
+                            ),
+                        )
+                    )
 
         yield from sorted(data, key=self._sort_function)
 
@@ -226,7 +229,7 @@ orders the results by time."""
     def _any_time_present(self, times):
         for time in TimeLinerType:
             if not isinstance(
-                times.get(time, renderers.NotApplicableValue),
+                times.get(time, renderers.NotApplicableValue()),
                 interfaces.renderers.BaseAbsentValue,
             ):
                 return True
